@@ -18,3 +18,5 @@ Thumbs.db
 
 app/model/
 
+*.pem
+*.tar.gz
