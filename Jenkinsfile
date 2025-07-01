@@ -13,7 +13,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git credentialsId: 'github', url: 'https://github.com/ashah-004/MCP-ML-PIPELINE.git'
+                git credentialsId: 'github', url: 'https://github.com/ashah-004/MCP-ML-PIPELINE.git', branch: 'main'
             }
         }
 
