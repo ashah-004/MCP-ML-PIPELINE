@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         PROJECT_ID = 'ai-detector-pipeline'
-        REGION = 'us-west2-c'
+        REGION = 'us-central1'
         REPO = 'ai-detector-repo' 
         IMAGE_NAME = 'ai-detector'
         GAR_URL = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE_NAME}"
