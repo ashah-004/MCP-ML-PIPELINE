@@ -37,6 +37,20 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sshagent(['vm2-ssh-credentials']) {
+                    sh '''
+                        scp -r k8s/ ashah004@34.94.241.11:/tmp/k8s
+                        ssh ashah004@34.94.241.11 "
+                        kubectl apply -f /tmp/k8s &&
+                        rm -rf /tmp/k8s
+                        "
+                    '''
+                }
+            }
+        }
     }
 
     post {
