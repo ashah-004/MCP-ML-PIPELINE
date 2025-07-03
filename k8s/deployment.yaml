@@ -21,6 +21,13 @@ spec:
           image: us-central1-docker.pkg.dev/ai-detector-pipeline/ai-detector-repo/ai-detector:latest
           ports:
             - containerPort: 8000
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/secrets/gcp/key.json"
+          volumeMounts:
+            - name: gcp-sa-key
+              mountPath: /secrets/gcp
+              readOnly: true
           resources:
             requests:
               cpu: "250m"
@@ -28,3 +35,7 @@ spec:
             limits:
               cpu: "500m"
               memory: "1Gi"
+      volumes:
+        - name: gcp-sa-key
+          secret:
+            secretName: gcp-service-account-key

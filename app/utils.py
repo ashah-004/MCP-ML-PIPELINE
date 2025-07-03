@@ -1,5 +1,40 @@
+import os
+import tarfile
+from google.cloud import storage
 from transformers import RobertaTokenizer, RobertaForSequenceClassification
 import torch
+
+# Constants
+MODEL_DIR = "app/model"
+MODEL_ARCHIVE = "model.tar.gz"
+BUCKET_NAME = "mcp-ai-detector-models"# ✅ Change this
+BLOB_NAME = "model.tar.gz" # ✅ Change this if needed (e.g., "model/model.tar.gz")
+
+def download_and_extract_model():
+    if not os.path.exists(MODEL_DIR):
+        os.makedirs(MODEL_DIR)
+
+    local_archive_path = os.path.join(MODEL_DIR, MODEL_ARCHIVE)
+
+    if not os.path.exists(local_archive_path):
+        print("🔽 Downloading model archive from GCS...")
+        client = storage.Client()
+        bucket = client.bucket(BUCKET_NAME)
+        blob = bucket.blob(BLOB_NAME)
+        blob.download_to_filename(local_archive_path)
+        print("✅ Model archive downloaded.")
+
+        print("📦 Extracting model...")
+        with tarfile.open(local_archive_path, "r:gz") as tar:
+            tar.extractall(path=MODEL_DIR)
+        print("✅ Model extracted.")
+
+        # Optionally delete the archive
+        os.remove(local_archive_path)
+
+# Download & extract model if needed
+if not os.path.exists(os.path.join(MODEL_DIR, "config.json")):  # adjust based on your actual contents
+    download_and_extract_model()
 
 # Force use of the same tokenizer as training
 tokenizer = RobertaTokenizer.from_pretrained("roberta-base")

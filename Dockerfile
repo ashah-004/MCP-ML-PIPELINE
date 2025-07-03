@@ -7,7 +7,7 @@ COPY requirements.txt .
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY app/model /app/app/model
+# COPY app/model /app/app/model
 COPY app/*.py /app/app/
 
 EXPOSE 8000
