@@ -3,4 +3,3 @@ venv/
 
 *.pem
 *.tar.gz
-*.json
