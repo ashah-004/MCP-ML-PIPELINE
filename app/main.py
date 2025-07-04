@@ -1,8 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.utils import predict
+from prometheus_fastapi_instrumentator import Instrumentator
+
 
 app = FastAPI(title="AI Text Detection API")
+
+instrumentator = Instrumentator()
+instrumentator.instrument(app).expose(app, include_in_schema=True)
 
 class PredictRequest(BaseModel):
     text: str
