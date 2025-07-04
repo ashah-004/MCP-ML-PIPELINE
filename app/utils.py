@@ -5,7 +5,7 @@ from transformers import RobertaTokenizer, RobertaForSequenceClassification
 import torch
 
 # Constants
-MODEL_DIR = "app/model"
+MODEL_DIR = "app/"
 MODEL_ARCHIVE = "model.tar.gz"
 BUCKET_NAME = "mcp-ai-detector-models"# ✅ Change this
 BLOB_NAME = "model.tar.gz" # ✅ Change this if needed (e.g., "model/model.tar.gz")
