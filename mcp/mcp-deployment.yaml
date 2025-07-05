@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  namespace: mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-server
+  template:
+    metadata:
+      labels:
+        app: mcp-server
+    spec:
+      serviceAccountName: mcp-service-account
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: mcp-server
+          image: us-central1-docker.pkg.dev/ai-detector-pipeline/mcp-repo/mcp-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9000
+            - containerPort: 8001 
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/google/key.json
+          volumeMounts:
+            - name: gcp-creds
+              mountPath: /var/secrets/google
+              readOnly: true
+      volumes:
+        - name: gcp-creds
+          secret:
+            secretName: gcp-service-account-key
+

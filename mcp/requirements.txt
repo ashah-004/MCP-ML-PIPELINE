@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+kubernetes
+requests
+python-dotenv
+prometheus_client
