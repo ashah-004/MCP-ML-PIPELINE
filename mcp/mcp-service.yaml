@@ -10,11 +10,13 @@ metadata:
 spec:
   selector:
     app: mcp-server
+  type: NodePort
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 9000
       targetPort: 9000
-    - protocol: TCP
+    - name: metrics
+      protocol: TCP
       port: 8001
       targetPort: 8001
-  type: ClusterIP

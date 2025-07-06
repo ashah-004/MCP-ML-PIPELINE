@@ -4,16 +4,39 @@ import logging
 from k8s_utils import get_pod_logs
 from healing import analyze_logs_and_heal
 from prometheus_client import start_http_server, Counter
+import os
+import json
+from datetime import datetime
 
 # Start Prometheus metrics server on port 8001
-start_http_server(8081)
+start_http_server(8001)
 
 # Define custom metrics
 healing_actions_counter = Counter('mcp_healing_actions_total', 'Total number of healing actions performed')
 
+LOG_DIR = "/app/healing_logs"
+LOG_FILE = os.path.join(LOG_DIR, "heal_log.jsonl")
+
+# Ensure the directory exists
+os.makedirs(LOG_DIR, exist_ok=True)
+
 # Increment this counter whenever MCP performs healing
 def perform_healing():
     healing_actions_counter.inc()
+
+def log_healing_event(namespace, deployment_name, pod_name, logs, result):
+    log_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "namespace": namespace,
+        "deployment_name": deployment_name,
+        "pod_name": pod_name,
+        "logs": logs,
+        "healing_action": result.get("action_taken"),
+        "message": result.get("message"),
+        "success": result.get("success")
+    }
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(log_entry) + "\n")
 
 app = FastAPI(title="Model-Centric Pipeline (MCP) Server")
 
@@ -42,6 +65,10 @@ async def heal(req: HealRequest):
 
     # Call healing logic
     result = analyze_logs_and_heal(req.namespace, req.deployment_name, pod_logs)
+
+    perform_healing()
+
+    log_healing_event(req.namespace, req.deployment_name, req.pod_name, pod_logs, result)
 
     return HealResponse(**result)
 
