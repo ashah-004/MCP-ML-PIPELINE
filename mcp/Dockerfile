@@ -19,5 +19,10 @@ RUN mkdir -p /app/healing_logs
 EXPOSE 9000
 EXPOSE 11434
 
-# Start Ollama server, wait, pull model, and then launch MCP server
-CMD bash -c "ollama serve & sleep 5 && ollama pull mistral && uvicorn main:app --host 0.0.0.0 --port 9000"
+# Use bash shell directly and run Ollama serve in background, wait for it,
+# pull model, then start uvicorn — all inline
+CMD bash -c "\
+  ollama serve & \
+  until curl -s http://localhost:11434/ | grep -q 'Ollama'; do sleep 2; done; \
+  ollama pull mistral; \
+  uvicorn main:app --host 0.0.0.0 --port 9000"

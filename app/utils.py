@@ -40,7 +40,7 @@ if not os.path.exists(os.path.join(MODEL_DIR, "config.json")):  # adjust based o
 tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
 
 # Load model from saved directory
-model = RobertaForSequenceClassification.from_pretrained("app/app/model")
+model = RobertaForSequenceClassification.from_pretrained("app/model")
 model.eval()
 
 # Move model to GPU if available
