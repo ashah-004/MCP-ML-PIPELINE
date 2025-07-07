@@ -21,8 +21,5 @@ EXPOSE 11434
 
 # Use bash shell directly and run Ollama serve in background, wait for it,
 # pull model, then start uvicorn — all inline
-CMD bash -c "\
-  ollama serve & \
-  until curl -s http://localhost:11434/ | grep -q 'Ollama'; do sleep 2; done; \
-  ollama pull mistral; \
-  uvicorn main:app --host 0.0.0.0 --port 9000"
+CMD ["bash", "-c", "ollama serve & until curl -s http://localhost:11434/ | grep -q 'Ollama'; do sleep 2; done; ollama pull mistral; uvicorn main:app --host 0.0.0.0 --port 9000"]
+
