@@ -32,7 +32,7 @@ RUN apt-get update && \
     apt-get install -y curl git python3 python3-pip wget libssl-dev libcurl4-openssl-dev && \
     apt-get clean
 
-# RUN pip install google-cloud-aiplatform google-auth
+RUN pip install google-cloud-aiplatform google-auth
 
 # Set up Python environment
 WORKDIR /app

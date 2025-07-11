@@ -41,15 +41,16 @@
 #             "action": "unknown",
 #             "description": f"Ollama_Error: {str(e)}"
 #         }
-import requests
+# llm_utils.py
+
 import json
 import time
-
-from vertexai.language_models import TextGenerationModel
+from vertexai.generative_models import GenerativeModel
 from google.cloud import aiplatform
 
-OLLAMA_URL = "http://ollama.mcp.svc.cluster.local:11434/api/generate"
-MODEL = "mistral"
+# Initialize Vertex AI
+aiplatform.init(project="ai-detector-pipeline", location="us-central1")
+model = GenerativeModel("gemini-2.0-flash-001")
 
 PROMPT_TEMPLATE = """You are a Kubernetes pod self-healing assistant.
 
@@ -62,7 +63,7 @@ You will receive container logs that include a traceback or runtime error. Your 
 {{"commands": ["cmd1", "cmd2"], "description": "Short explanation of the fix"}}
 
 ### Guidelines:
-- Return only bash commands to fix Python/OS-level errors (e.g., `pip install tiktoken`)
+- Return only bash commands to fix Python/OS-level errors (e.g., `pip install xyz package`)
 - Only fix real crashes (e.g., ModuleNotFoundError, FileNotFoundError, ImportError, RuntimeError, etc.)
 - Do NOT respond to warnings like FutureWarning or DeprecationWarning
 - Return a single-line valid JSON. No Markdown, no explanations, no code blocks.
@@ -71,8 +72,7 @@ You will receive container logs that include a traceback or runtime error. Your 
 
 def extract_key_errors(logs: str, max_chars=500) -> str:
     """
-    Extracts last lines with actual crash content (ignores warnings).
-    Returns last max_chars of those lines.
+    Extracts crash-related lines from logs and returns last `max_chars` characters.
     """
     lines = logs.strip().splitlines()
     error_lines = []
@@ -81,40 +81,29 @@ def extract_key_errors(logs: str, max_chars=500) -> str:
 
     for line in reversed(lines):
         if any(x in line for x in keywords) and not any(y in line for y in exclude):
-            error_lines.insert(0, line)  # keep original order
+            error_lines.insert(0, line)
 
     extracted = "\n".join(error_lines)
     return extracted[-max_chars:] if extracted else "\n".join(lines[-10:])[-max_chars:]
 
-def infer_healing_commands(logs: str, stream_timeout: int = 120):
+def infer_healing_commands(logs: str) -> dict:
     prompt_logs = extract_key_errors(logs)
     prompt = PROMPT_TEMPLATE.format(logs=prompt_logs)
 
-    payload = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": True
-    }
-
     for attempt in range(3):
         try:
-            response = requests.post(OLLAMA_URL, json=payload, stream=True, timeout=stream_timeout)
-            response.raise_for_status()
+            response = model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.3,
+                    "max_output_tokens": 512
+                }
+            )
 
-            output = ""
-            for line in response.iter_lines():
-                if line:
-                    try:
-                        raw = line.decode("utf-8").strip()
-                        if raw.startswith("data: "):
-                            raw = raw[len("data: "):]
-                        data = json.loads(raw)
-                        output += data.get("response", "")
-                    except Exception:
-                        continue
+            output = response.text.strip()
+            print(f"[MCP] Gemini raw response:\n{output}")
 
-            print(f"[MCP] Ollama raw accumulated output:\n{output}")
-
+            # Extract JSON block
             json_start = output.find("{")
             json_end = output.rfind("}") + 1
             if json_start == -1 or json_end == -1:
@@ -122,6 +111,7 @@ def infer_healing_commands(logs: str, stream_timeout: int = 120):
 
             healing = json.loads(output[json_start:json_end])
 
+            # Validate and filter commands
             if not isinstance(healing, dict):
                 raise ValueError("Expected a JSON object")
 
@@ -131,10 +121,16 @@ def infer_healing_commands(logs: str, stream_timeout: int = 120):
             if "description" not in healing:
                 healing["description"] = "Auto-generated healing commands."
 
-            blacklist = ["rm -rf", "shutdown", "reboot", "apt", "yum", "apk", "uninstall", "input(", "&& read", "curl | sh", "wget | sh"]
+            blacklist = [
+                "rm -rf", "shutdown", "reboot", "apt", "yum", "apk", "uninstall",
+                "input(", "&& read", "curl | sh", "wget | sh"
+            ]
+
             filtered = [
                 cmd for cmd in healing["commands"]
-                if not any(bad in cmd for bad in blacklist) and "\n" not in cmd and ";" not in cmd
+                if not any(bad in cmd for bad in blacklist)
+                and "\n" not in cmd
+                and ";" not in cmd
             ]
 
             if not filtered:
@@ -144,10 +140,11 @@ def infer_healing_commands(logs: str, stream_timeout: int = 120):
             return healing
 
         except Exception as e:
-            print(f"[MCP] Ollama error (attempt {attempt + 1}): {e}")
+            print(f"[MCP] Gemini error (attempt {attempt + 1}): {e}")
             time.sleep(2)
 
     return {
         "commands": [],
-        "description": "Ollama failure: Unable to infer valid healing commands."
+        "description": "Gemini failure: Unable to infer valid healing commands."
     }
+
