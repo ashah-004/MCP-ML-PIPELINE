@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.utils import predict
 from prometheus_fastapi_instrumentator import Instrumentator
+# import tiktoken
 
 
 app = FastAPI(title="AI Text Detection API")

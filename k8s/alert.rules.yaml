@@ -1,0 +1,22 @@
+# prometheus-alert-rules.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: monitoring
+data:
+  alert.rules.yml: |
+    groups:
+    - name: pod-alerts
+      rules:
+      - alert: PodCrashLooping
+        expr: kube_pod_container_status_restarts_total{job="kube-state-metrics"} > 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} is restarting"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted more than 3 times in 2 minutes."
+          mcp_namespace: "{{ $labels.namespace }}"
+          mcp_deployment: "ai-detector"  # Optional: adjust or make dynamic
+          mcp_pod: "{{ $labels.pod }}"

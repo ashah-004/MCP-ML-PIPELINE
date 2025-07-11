@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import logging
 from k8s_utils import get_pod_logs
@@ -7,6 +7,7 @@ from prometheus_client import start_http_server, Counter
 import os
 import json
 from datetime import datetime
+
 
 # Start Prometheus metrics server on port 8001
 start_http_server(8001)
@@ -71,6 +72,43 @@ async def heal(req: HealRequest):
     log_healing_event(req.namespace, req.deployment_name, req.pod_name, pod_logs, result)
 
     return HealResponse(**result)
+
+@app.post("/mcp/heal/auto")
+async def auto_heal(request: Request):
+    payload = await request.json()
+
+    alerts = payload.get("alerts", [])
+    if not alerts:
+        raise HTTPException(status_code=400, detail="No alerts received")
+
+    responses = []
+
+    for alert in alerts:
+        labels = alert.get("labels", {})
+        namespace = labels.get("mcp_namespace")
+        deployment = labels.get("mcp_deployment")
+        pod_name = labels.get("mcp_pod")
+
+        if not all([namespace, deployment, pod_name]):
+            continue  # skip if any required label is missing
+
+        logging.info(f"[AUTO] Healing alert triggered for pod {pod_name} in ns {namespace}")
+
+        pod_logs = get_pod_logs(namespace, pod_name)
+        if not pod_logs:
+            continue
+
+        result = analyze_logs_and_heal(namespace, deployment, pod_logs)
+        perform_healing()
+        log_healing_event(namespace, deployment, pod_name, pod_logs, result)
+
+        responses.append({
+            "pod": pod_name,
+            "namespace": namespace,
+            "result": result
+        })
+
+    return {"healed": responses}
 
 @app.get("/")
 async def root():

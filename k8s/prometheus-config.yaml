@@ -9,7 +9,12 @@ data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
-
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ["alertmanager:9093"]
+    rule_files:
+      - "/etc/prometheus/rules/alert.rules.yml" 
     scrape_configs:
       - job_name: 'kubernetes-services'
         kubernetes_sd_configs:
@@ -27,3 +32,6 @@ data:
             regex: (.+):(?:\d+);(.+)
             replacement: ${1}:${2}
             target_label: __address__
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.kube-system.svc.cluster.local:8080']
