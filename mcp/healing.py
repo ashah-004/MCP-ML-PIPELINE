@@ -61,13 +61,12 @@ from llm_utils import infer_healing_commands
 
 LOG_DIR = "/app/healing_logs"
 os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "healing_dataset.json")
 
 def extract_relevant_logs(logs: str) -> str:
-    # Extract last 100 lines to capture tracebacks/errors, removing leading warnings
+    """Extract last 100 lines of logs to capture errors."""
     lines = logs.strip().splitlines()
-    if len(lines) > 100:
-        return "\n".join(lines[-100:])
-    return logs
+    return "\n".join(lines[-100:]) if len(lines) > 100 else logs
 
 def analyze_logs_and_heal(namespace: str, deployment_name: str, pod_logs: str) -> dict:
     print(f"[MCP] Healing triggered for namespace={namespace}, deployment={deployment_name}")
@@ -76,6 +75,7 @@ def analyze_logs_and_heal(namespace: str, deployment_name: str, pod_logs: str) -
 
     pod_logs = extract_relevant_logs(pod_logs)
 
+    # LLM inference
     result = infer_healing_commands(pod_logs)
     commands = result.get("commands", [])
     description = result.get("description", "")
@@ -93,6 +93,7 @@ def analyze_logs_and_heal(namespace: str, deployment_name: str, pod_logs: str) -
         "success": False
     }
 
+    # Filter invalid commands
     filtered_commands = [cmd for cmd in commands if cmd.strip() and '<' not in cmd and '>' not in cmd]
     if len(filtered_commands) < len(commands):
         print("[MCP] Warning: Some placeholder commands were removed.")
@@ -101,6 +102,7 @@ def analyze_logs_and_heal(namespace: str, deployment_name: str, pod_logs: str) -
         save_healing_log(log_entry)
         return {"success": False, "action_taken": "none", "message": "No healing commands to run"}
 
+    # Ensure pod is ready
     pod_ready = wait_for_pod_ready(namespace, pod_name, timeout=10)
     if not pod_ready:
         print(f"[MCP] Pod {pod_name} not ready. Restarting deployment...")
@@ -122,13 +124,14 @@ def analyze_logs_and_heal(namespace: str, deployment_name: str, pod_logs: str) -
             return {"success": False, "action_taken": "new_pod_not_ready", "message": message}
         print(f"[MCP] Pod {pod_name} is ready after restart. Proceeding with healing commands.")
 
+    # Execute healing commands
     full_output = []
     all_success = True
     for cmd in filtered_commands:
         print(f"[MCP] Executing command in pod: {cmd}")
-        result = exec_command_in_pod(namespace, pod_name, cmd)
-        success = result["success"]
-        output = result["output"]
+        res = exec_command_in_pod(namespace, pod_name, cmd)
+        success = res.get("success", False)
+        output = res.get("output", "")
         full_output.append(f"$ {cmd}\n{output}")
         if not success:
             print(f"[MCP] Command failed: {cmd}")
@@ -146,16 +149,15 @@ def analyze_logs_and_heal(namespace: str, deployment_name: str, pod_logs: str) -
     }
 
 def save_healing_log(log_entry):
-    log_file = os.path.join(LOG_DIR, "healing_dataset.json")
     try:
-        if os.path.exists(log_file):
-            with open(log_file, "r+", encoding="utf-8") as f:
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r+", encoding="utf-8") as f:
                 data = json.load(f)
                 data.append(log_entry)
                 f.seek(0)
                 json.dump(data, f, indent=2)
         else:
-            with open(log_file, "w", encoding="utf-8") as f:
+            with open(LOG_FILE, "w", encoding="utf-8") as f:
                 json.dump([log_entry], f, indent=2)
         print("[MCP] Healing log written successfully.")
     except Exception as e:

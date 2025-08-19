@@ -6,6 +6,7 @@ metadata:
     app: ai-detector
 spec:
   replicas: 1
+  revisionHistoryLimit : 0
   selector:
     matchLabels:
       app: ai-detector

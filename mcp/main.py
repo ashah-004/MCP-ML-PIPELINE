@@ -7,21 +7,22 @@ from prometheus_client import start_http_server, Counter
 import os
 import json
 from datetime import datetime
+import sys
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='[MCP] %(asctime)s %(levelname)s: %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 
-# Start Prometheus metrics server on port 8001
+# Prometheus metrics server
 start_http_server(8001)
-
-# Define custom metrics
 healing_actions_counter = Counter('mcp_healing_actions_total', 'Total number of healing actions performed')
 
 LOG_DIR = "/app/healing_logs"
+os.makedirs(LOG_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOG_DIR, "heal_log.jsonl")
 
-# Ensure the directory exists
-os.makedirs(LOG_DIR, exist_ok=True)
-
-# Increment this counter whenever MCP performs healing
 def perform_healing():
     healing_actions_counter.inc()
 
@@ -45,7 +46,7 @@ class HealRequest(BaseModel):
     namespace: str
     deployment_name: str
     pod_name: str
-    logs: str = None  # optional, if provided by caller
+    logs: str = None
 
 class HealResponse(BaseModel):
     success: bool
@@ -56,19 +57,12 @@ class HealResponse(BaseModel):
 async def heal(req: HealRequest):
     logging.info(f"Received heal request for pod {req.pod_name} in namespace {req.namespace}")
 
-    # If logs not provided, fetch from Kubernetes API
-    pod_logs = req.logs
-    if not pod_logs:
-        pod_logs = get_pod_logs(req.namespace, req.pod_name)
-
+    pod_logs = req.logs or get_pod_logs(req.namespace, req.pod_name)
     if not pod_logs:
         raise HTTPException(status_code=404, detail="Could not retrieve pod logs")
 
-    # Call healing logic
     result = analyze_logs_and_heal(req.namespace, req.deployment_name, pod_logs)
-
     perform_healing()
-
     log_healing_event(req.namespace, req.deployment_name, req.pod_name, pod_logs, result)
 
     return HealResponse(**result)
@@ -76,26 +70,36 @@ async def heal(req: HealRequest):
 @app.post("/mcp/heal/auto")
 async def auto_heal(request: Request):
     payload = await request.json()
+    try:
+        logging.info(f"[AUTO] Received raw payload from Alertmanager:\n{json.dumps(payload, indent=2)}")
+    except Exception:
+        print(f"[AUTO] Received payload (fallback): {payload}")
 
     alerts = payload.get("alerts", [])
     if not alerts:
         raise HTTPException(status_code=400, detail="No alerts received")
 
     responses = []
-
     for alert in alerts:
+        if alert.get("status") != "firing":
+            continue
+
         labels = alert.get("labels", {})
-        namespace = labels.get("mcp_namespace")
-        deployment = labels.get("mcp_deployment")
-        pod_name = labels.get("mcp_pod")
+        annotations = alert.get("annotations", {})
+
+        namespace = labels.get("mcp_namespace") or annotations.get("mcp_namespace")
+        deployment = labels.get("mcp_deployment") or annotations.get("mcp_deployment")
+        pod_name = labels.get("mcp_pod") or annotations.get("mcp_pod")
 
         if not all([namespace, deployment, pod_name]):
-            continue  # skip if any required label is missing
+            logging.warning(f"[AUTO] Skipping alert, missing namespace/deployment/pod: {alert}")
+            continue
 
         logging.info(f"[AUTO] Healing alert triggered for pod {pod_name} in ns {namespace}")
 
-        pod_logs = get_pod_logs(namespace, pod_name)
+        pod_logs = get_pod_logs(namespace, pod_name) or annotations.get("description", "")
         if not pod_logs:
+            logging.warning(f"[AUTO] No logs found for pod {pod_name}")
             continue
 
         result = analyze_logs_and_heal(namespace, deployment, pod_logs)

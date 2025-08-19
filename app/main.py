@@ -2,8 +2,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from app.utils import predict
 from prometheus_fastapi_instrumentator import Instrumentator
+import os
 # import tiktoken
 
+with open("/app/protected/locked.txt", "w") as f:
+    f.write("This should fail.")
 
 app = FastAPI(title="AI Text Detection API")
 
@@ -27,3 +30,4 @@ def predict_text(request: PredictRequest):
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text must not be empty")
     return predict(request.text)
+

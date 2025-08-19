@@ -80,6 +80,18 @@ def wait_for_pod_ready(namespace: str, pod_name: str, timeout=60):
         time.sleep(3)
     return False
 
+def wait_for_container_ready(namespace: str, pod_name: str, expected_container: str, timeout=15):
+    for _ in range(timeout):
+        try:
+            pod = core_v1.read_namespaced_pod(name=pod_name, namespace=namespace)
+            container_names = [c.name for c in pod.spec.containers]
+            if expected_container in container_names:
+                return True
+        except ApiException:
+            pass
+        time.sleep(1)
+    raise RuntimeError(f"[MCP] Container '{expected_container}' not ready in pod '{pod_name}' after {timeout}s")
+
 def get_pod_logs(namespace: str, pod_name: str, container: str = None, tail_lines: int = 1000) -> str:
     try:
         return core_v1.read_namespaced_pod_log(
@@ -138,6 +150,10 @@ def exec_command_in_pod(namespace: str, pod_name: str, command: str):
         containers = [c.name for c in pod.spec.containers]
         container_name = containers[0]
         print(f"[MCP] Detected containers in pod: {containers}")
+
+        # Add container readiness wait
+        wait_for_container_ready(namespace, pod_name, container_name)
+
     except Exception as e:
         logging.error(f"[MCP] Failed to retrieve pod/container info: {e}")
         return {
@@ -182,3 +198,4 @@ def exec_command_in_pod(namespace: str, pod_name: str, command: str):
                 "success": False,
                 "output": f"Unexpected error during exec: {e}"
             }
+
